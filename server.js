@@ -59,6 +59,20 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Automatic Backup Scheduler (Every day at 2:00 AM)
+const cron = require('node-cron');
+const backupService = require('./src/services/backupService');
+
+cron.schedule('0 2 * * *', async () => {
+    try {
+        console.log('Running automatic daily backup...');
+        await backupService.createBackup(null, 'System Scheduler');
+        console.log('Daily backup completed successfully.');
+    } catch (error) {
+        console.error('Daily backup failed:', error);
+    }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Unhandled error:', err);

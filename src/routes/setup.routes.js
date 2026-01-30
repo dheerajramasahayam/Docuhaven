@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const { db, isSetupComplete, markSetupComplete, getDefaultDocumentTypes } = require('../config/database');
 const { generateToken } = require('../middleware/auth');
 const { logAction, ACTIONS } = require('../services/auditService');
+const backupService = require('../services/backupService');
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ router.post('/complete', async (req, res) => {
             return res.status(400).json({ error: 'Setup has already been completed' });
         }
 
-        const { admin, documentTypes, customerFields } = req.body;
+        const { admin, documentTypes, customerFields, backupConfig } = req.body;
 
         // Validate admin data
         if (!admin || !admin.username || !admin.email || !admin.password) {
@@ -71,6 +72,11 @@ router.post('/complete', async (req, res) => {
       VALUES (?, ?)
     `);
         settingsStmt.run('customer_fields', JSON.stringify(fieldsConfig));
+
+        // Save backup config if provided
+        if (backupConfig) {
+            backupService.saveBackupSettings(backupConfig);
+        }
 
         // Mark setup as complete
         markSetupComplete();

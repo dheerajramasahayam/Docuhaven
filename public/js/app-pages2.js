@@ -193,3 +193,120 @@ App.prototype.renderAuditLogs = async function (content) {
   let searchTimeout;
   document.getElementById('audit-search').oninput = (e) => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => loadLogs(e.target.value), 300); };
 };
+
+// ============ SETTINGS ============
+App.prototype.renderSettings = async function (content) {
+  content.innerHTML = `
+    <div class="tabs">
+      <div class="tab-item active" data-tab="backups">Backups & Restore</div>
+    </div>
+    <div class="tab-content" id="settings-content">
+      <div class="loading-content"><div class="loading-spinner"></div></div>
+    </div>`;
+
+  const renderBackupsTab = async () => {
+    const container = document.getElementById('settings-content');
+    container.innerHTML = '<div class="loading-content"><div class="loading-spinner"></div></div>';
+
+    try {
+      const config = await api.getBackupConfig();
+      const backups = await api.getBackups();
+
+      container.innerHTML = `
+            <div class="row" style="gap:var(--space-6)">
+                <div class="col" style="flex:1">
+                    <div class="card">
+                        <div class="card-header"><h3 class="card-title">Backup Configuration</h3></div>
+                        <div style="padding:var(--space-4)">
+                            <div class="form-group">
+                                <label class="form-label">Primary Backup Path</label>
+                                <input type="text" class="form-input" id="conf-path1" value="${config.localPath1 || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Secondary Backup Path</label>
+                                <input type="text" class="form-input" id="conf-path2" value="${config.localPath2 || ''}">
+                            </div>
+                             <div class="form-group">
+                                <label class="form-label" style="display:flex;align-items:center;gap:var(--space-2)">
+                                    <input type="checkbox" id="conf-cloud" ${config.cloudEnabled ? 'checked' : ''}> 
+                                    Enable Cloud Backup
+                                </label>
+                            </div>
+                            <div id="cloud-config" style="display:${config.cloudEnabled ? 'block' : 'none'};padding-left:var(--space-4);border-left:2px solid var(--border-primary);margin-bottom:var(--space-4)">
+                                <div class="form-group"><label class="form-label">Cloud Provider (S3 Compatible)</label><input type="text" class="form-input" placeholder="e.g., AWS, MinIO"></div>
+                                <div class="form-group"><label class="form-label">Endpoint</label><input type="text" class="form-input" placeholder="https://s3.amazonaws.com"></div>
+                                <div class="form-group"><label class="form-label">Bucket Name</label><input type="text" class="form-input"></div>
+                                <div class="form-group"><label class="form-label">Access Key</label><input type="text" class="form-input"></div>
+                                <div class="form-group"><label class="form-label">Secret Key</label><input type="password" class="form-input"></div>
+                            </div>
+                            <button class="btn btn-primary" id="save-config-btn">Save Configuration</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col" style="flex:1">
+                     <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Available Backups</h3>
+                            <button class="btn btn-secondary btn-sm" id="run-backup-btn">Backup Now</button>
+                        </div>
+                        <div style="max-height:400px;overflow-y:auto">
+                            ${backups.length ? `
+                                <table class="table">
+                                    <thead><tr><th>Date</th><th>Size</th><th>Action</th></tr></thead>
+                                    <tbody>
+                                        ${backups.map(b => `
+                                            <tr>
+                                                <td>${formatDateTime(b.created_at)}</td>
+                                                <td>${formatBytes(b.size)}</td>
+                                                <td>
+                                                    <a href="file://${b.path}" class="btn btn-ghost btn-sm" title="Manually copy this file">📂</a>
+                                                    <button class="btn btn-ghost btn-sm" onclick="Toast.info('To restore: Replace app data with contents of this zip.')">ℹ️ Restore</button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            ` : '<div class="empty-state"><p>No backups found</p></div>'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+      document.getElementById('conf-cloud').onchange = (e) => {
+        document.getElementById('cloud-config').style.display = e.target.checked ? 'block' : 'none';
+      };
+
+      document.getElementById('save-config-btn').onclick = async () => {
+        const data = {
+          localPath1: document.getElementById('conf-path1').value.trim(),
+          localPath2: document.getElementById('conf-path2').value.trim(),
+          cloudEnabled: document.getElementById('conf-cloud').checked
+        };
+        try {
+          await api.updateBackupConfig(data);
+          Toast.success('Configuration saved');
+          renderBackupsTab(); // Refresh to ensure sync
+        } catch (e) { Toast.error(e.message); }
+      };
+
+      document.getElementById('run-backup-btn').onclick = async () => {
+        const btn = document.getElementById('run-backup-btn');
+        btn.disabled = true; btn.textContent = 'Backing up...';
+        try {
+          await api.runBackup();
+          Toast.success('Backup completed successfully');
+          renderBackupsTab();
+        } catch (e) {
+          Toast.error(e.message);
+          btn.disabled = false; btn.textContent = 'Backup Now';
+        }
+      };
+
+    } catch (e) {
+      container.innerHTML = `<div class="empty-state"><p class="text-danger">Error loading settings: ${e.message}</p></div>`;
+    }
+  };
+
+  renderBackupsTab();
+};

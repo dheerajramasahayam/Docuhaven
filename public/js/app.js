@@ -56,7 +56,7 @@ class App {
             <h1 class="auth-title">Welcome!</h1>
             <p class="auth-subtitle">Let's set up your DocuHaven</p>
           </div>
-          <div class="setup-steps"><div class="setup-step active"></div><div class="setup-step"></div><div class="setup-step"></div></div>
+          <div class="setup-steps"><div class="setup-step active"></div><div class="setup-step"></div><div class="setup-step"></div><div class="setup-step"></div></div>
           <div id="setup-content"></div>
         </div>
       </div>`;
@@ -64,7 +64,7 @@ class App {
 
   initSetupHandlers() {
     this.setupStep = 1;
-    this.setupData = { admin: {}, documentTypes: [] };
+    this.setupData = { admin: {}, documentTypes: [], backupConfig: {} };
     this.renderSetupStep();
   }
 
@@ -114,18 +114,60 @@ class App {
         this.setupStep = 3;
         this.renderSetupStep();
       };
+    } else if (this.setupStep === 3) {
+      content.innerHTML = `
+        <h3 style="margin-bottom:var(--space-4)">Backup Configuration</h3>
+        <p style="color:var(--text-secondary);margin-bottom:var(--space-4);font-size:var(--text-sm)">Secure your data with automatic backups.</p>
+        
+        <div class="form-group">
+            <label class="form-label">Primary Backup Path (Required)</label>
+            <input type="text" class="form-input" id="backup-path1" placeholder="/path/to/backup/drive" value="${this.setupData.backupConfig?.localPath1 || ''}">
+            <p style="font-size:var(--text-xs);color:var(--text-tertiary);margin-top:var(--space-1)">Absolute path to a secure directory (e.g., /mnt/backup_drive).</p>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Secondary Backup Path (Recommended)</label>
+            <input type="text" class="form-input" id="backup-path2" placeholder="/path/to/another/drive" value="${this.setupData.backupConfig?.localPath2 || ''}">
+            <p style="font-size:var(--text-xs);color:var(--text-tertiary);margin-top:var(--space-1)">A different physical drive is recommended.</p>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:var(--space-2)">
+                <input type="checkbox" id="cloud-enabled" ${this.setupData.backupConfig?.cloudEnabled ? 'checked' : ''}> 
+                Enable Cloud Backup (Configure Later)
+            </label>
+        </div>
+
+        <div style="display:flex;gap:var(--space-3)">
+          <button class="btn btn-secondary" id="setup-back">← Back</button>
+          <button class="btn btn-primary btn-full btn-lg" id="setup-next">Continue →</button>
+        </div>`;
+
+      document.getElementById('setup-back').onclick = () => { this.setupStep = 2; this.renderSetupStep(); };
+      document.getElementById('setup-next').onclick = () => {
+        const path1 = document.getElementById('backup-path1').value.trim();
+        const path2 = document.getElementById('backup-path2').value.trim();
+        const cloudEnabled = document.getElementById('cloud-enabled').checked;
+
+        if (!path1) { Toast.error('Primary Backup Path is required'); return; }
+
+        this.setupData.backupConfig = { localPath1: path1, localPath2: path2, cloudEnabled };
+        this.setupStep = 4;
+        this.renderSetupStep();
+      };
     } else {
       content.innerHTML = `
         <h3 style="margin-bottom:var(--space-4)">Ready to Go!</h3>
         <div style="background:var(--bg-tertiary);padding:var(--space-4);border-radius:var(--radius-lg);margin-bottom:var(--space-6)">
           <p style="font-size:var(--text-sm);color:var(--text-secondary);margin-bottom:var(--space-2)"><strong>Admin:</strong> ${this.setupData.admin.username}</p>
-          <p style="font-size:var(--text-sm);color:var(--text-secondary)"><strong>Document Types:</strong> ${this.setupData.documentTypes.length} configured</p>
+          <p style="font-size:var(--text-sm);color:var(--text-secondary);margin-bottom:var(--space-2)"><strong>Document Types:</strong> ${this.setupData.documentTypes.length} configured</p>
+          <p style="font-size:var(--text-sm);color:var(--text-secondary)"><strong>Backups:</strong> ${this.setupData.backupConfig.localPath1 ? 'Configured' : 'Skipped'}</p>
         </div>
         <div style="display:flex;gap:var(--space-3)">
           <button class="btn btn-secondary" id="setup-back">← Back</button>
           <button class="btn btn-success btn-full btn-lg" id="setup-complete">🚀 Complete Setup</button>
         </div>`;
-      document.getElementById('setup-back').onclick = () => { this.setupStep = 2; this.renderSetupStep(); };
+      document.getElementById('setup-back').onclick = () => { this.setupStep = 3; this.renderSetupStep(); };
       document.getElementById('setup-complete').onclick = async () => {
         try {
           const btn = document.getElementById('setup-complete');
@@ -202,6 +244,7 @@ class App {
               <div class="nav-item" data-page="users"><span class="nav-item-icon">👤</span>Users</div>
               <div class="nav-item" data-page="doctypes"><span class="nav-item-icon">🏷️</span>Document Types</div>
               <div class="nav-item" data-page="audit"><span class="nav-item-icon">📋</span>Audit Logs</div>
+              <div class="nav-item" data-page="settings"><span class="nav-item-icon">⚙️</span>Settings</div>
             </div>` : ''}
           </nav>
           <div class="sidebar-footer">
@@ -237,7 +280,7 @@ class App {
     this.currentPage = page;
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
-    const titles = { dashboard: 'Dashboard', customers: 'Customers', documents: 'Documents', users: 'User Management', doctypes: 'Document Types', audit: 'Audit Logs' };
+    const titles = { dashboard: 'Dashboard', customers: 'Customers', documents: 'Documents', users: 'User Management', doctypes: 'Document Types', audit: 'Audit Logs', settings: 'Settings' };
     document.getElementById('page-title').textContent = titles[page] || page;
     this.renderPage(page);
   }
@@ -254,6 +297,7 @@ class App {
       case 'users': this.renderUsers(content, actions); break;
       case 'doctypes': this.renderDocTypes(content, actions); break;
       case 'audit': this.renderAuditLogs(content); break;
+      case 'settings': this.renderSettings(content); break;
       default: content.innerHTML = '<p>Page not found</p>';
     }
   }

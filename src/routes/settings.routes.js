@@ -117,4 +117,61 @@ router.get('/customer-fields/config', (req, res) => {
     }
 });
 
+// ============ BACKUP SETTINGS ============
+const backupService = require('../services/backupService');
+
+// Get backup config
+router.get('/backup/config', (req, res) => {
+    try {
+        const config = backupService.getBackupSettings();
+        res.json(config || {});
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get backup config' });
+    }
+});
+
+// Update backup config
+router.put('/backup/config', (req, res) => {
+    try {
+        const config = req.body;
+        backupService.saveBackupSettings(config);
+
+        logAction({
+            userId: req.user.id,
+            username: req.user.username,
+            action: ACTIONS.SETTINGS_UPDATE,
+            entityType: 'settings',
+            entityName: 'backup_config',
+            ipAddress: req.ip
+        });
+
+        res.json({ success: true, config });
+    } catch (error) {
+        console.error('Update backup config error:', error);
+        res.status(500).json({ error: 'Failed to update backup config' });
+    }
+});
+
+// List backups
+router.get('/backup/list', (req, res) => {
+    try {
+        const backups = backupService.listBackups();
+        res.json(backups);
+    } catch (error) {
+        console.error('List backups error:', error);
+        res.status(500).json({ error: 'Failed to list backups' });
+    }
+});
+
+// Trigger manual backup
+router.post('/backup/run', async (req, res) => {
+    try {
+        const result = await backupService.createBackup(req.user.id, req.user.username);
+        res.json(result);
+    } catch (error) {
+        console.error('Manual backup error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;

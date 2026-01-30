@@ -82,6 +82,12 @@ class ApiClient {
     getDashboardStats() { return this.request('/dashboard/stats'); }
     getSettings() { return this.request('/settings'); }
     updateSetting(key, value) { return this.request(`/settings/${key}`, { method: 'PUT', body: { value } }); }
+
+    // Backup
+    getBackupConfig() { return this.request('/settings/backup/config'); }
+    updateBackupConfig(data) { return this.request('/settings/backup/config', { method: 'PUT', body: data }); }
+    getBackups() { return this.request('/settings/backup/list'); }
+    runBackup() { return this.request('/settings/backup/run', { method: 'POST' }); }
 }
 
 window.api = new ApiClient();

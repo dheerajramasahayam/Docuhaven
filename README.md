@@ -36,7 +36,7 @@ DocuHaven is a **self-hosted, open-source document management system (DMS)** des
 
 1.  **Clone the repository**
     ```bash
-    git clone https://github.com/yourusername/docuhaven.git
+    git clone https://github.com/dheerajramasahayam/Docuhaven.git
     cd docuhaven
     ```
 
