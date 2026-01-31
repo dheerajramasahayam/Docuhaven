@@ -123,5 +123,12 @@ echo "If you cannot access the site, make sure Port 80 (HTTP) is OPEN."
 echo "   - AWS/GCP/Azure: Check 'Security Groups' or 'Firewall Rules'."
 echo "   - Ubuntu (UFW): run 'sudo ufw allow 80'"
 echo ""
+echo "📝 To view logs, run:"
+echo "   source ~/.nvm/nvm.sh && pm2 logs docuhaven"
+echo ""
+
+# Show status and recent logs
 pm2 status
+echo "--- Recent Logs ---"
+pm2 logs docuhaven --lines 20 --nostream
 
