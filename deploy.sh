@@ -2,15 +2,50 @@
 
 # DocuHaven Deployment Script
 
-echo "🚀 Starting Deployment..."
+echo "🚀 Starting Deployment Check..."
 
-# 1. Pull latest changes
+# --- 1. Ensure Node.js & NPM are available ---
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+if ! command -v npm &> /dev/null; then
+    echo "⚠️  npm not found. Attempting to install Node.js via NVM..."
+    
+    # Install NVM
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    
+    # Load NVM
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    
+    # Install Node LTS
+    echo "📦 Installing Node.js LTS..."
+    nvm install --lts
+    nvm use --lts
+    
+    if ! command -v npm &> /dev/null; then
+        echo "❌ Critical: Failed to install Node.js/npm. Please install manually."
+        exit 1
+    fi
+    echo "✅ Node.js installed."
+fi
+
+# --- 2. Ensure PM2 is installed ---
+if ! command -v pm2 &> /dev/null; then
+    echo "⚠️  PM2 not found. Installing global PM2..."
+    npm install -g pm2 || { echo "❌ Failed to install PM2"; exit 1; }
+    echo "✅ PM2 installed."
+fi
+
+echo "🚀 Deployment Prerequisites OK. Proceeding..."
+
+# --- 3. Update Code ---
 echo "📥 Pulling latest code..."
 git pull origin main
 
-# 2. Install dependencies
-echo "📦 Installing dependencies..."
-npm install
+# --- 4. Install Project Dependencies ---
+echo "📦 Installing project dependencies..."
+npm install || { echo "❌ npm install failed"; exit 1; }
 
 # 3. Check for database migrations (if any in future)
 # npm run migrate 
