@@ -7,6 +7,7 @@ function formatDate(d) { return new Date(d).toLocaleDateString('en-IN', { day: '
 function formatDateTime(d) { return new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }); }
 function formatBytes(b) { if (!b) return '0 B'; const k = 1024, s = ['B', 'KB', 'MB', 'GB']; const i = Math.floor(Math.log(b) / Math.log(k)); return parseFloat((b / Math.pow(k, i)).toFixed(1)) + ' ' + s[i]; }
 function getFileIcon(mime) { return mime?.includes('pdf') ? '📕' : '🖼️'; }
+function getInitials(name) { return name ? name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '??'; }
 
 // ============ DASHBOARD ============
 // ============ DASHBOARD ============
@@ -80,70 +81,183 @@ App.prototype.renderDashboard = async function (content) {
 };
 
 // ============ CUSTOMERS ============
+// ============ CUSTOMERS ============
 App.prototype.renderCustomers = async function (content, actions) {
-  const canManage = this.user.role !== 'viewer';
-  if (canManage) actions.innerHTML = '<button class="btn btn-primary" id="add-customer-btn">+ Add Customer</button>';
+  actions.innerHTML = '<button class="btn btn-primary" id="add-customer-btn">+ Add Customer</button>';
   content.innerHTML = `
-    <div class="toolbar"><div class="search-input-wrapper"><input type="text" class="search-input" id="customer-search" placeholder="Search customers..."></div></div>
+    <div class="toolbar">
+      <div class="search-input-wrapper"><input type="text" class="search-input" id="cust-search" placeholder="Search customers..."></div>
+    </div>
     <div id="customers-list"><div class="loading-content"><div class="loading-spinner"></div></div></div>`;
 
   const loadCustomers = async (search = '') => {
-    const { customers } = await api.getCustomers({ search });
+    // Only fetch root parents (parent_id=null) if no search, otherwise search all to find matches
+    const params = { search };
+    if (!search) params.parent_id = 'null';
+
+    const { customers } = await api.getCustomers(params);
     const list = document.getElementById('customers-list');
-    if (!customers.length) { list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><h3 class="empty-state-title">No customers yet</h3></div>'; return; }
-    list.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--space-4)" class="stagger-children">
-      ${customers.map(c => `
-        <div class="customer-card" data-id="${c.id}">
-          <div class="customer-card-header">
-            <div class="customer-avatar">${c.name.charAt(0).toUpperCase()}</div>
-            <div><div class="customer-name">${c.name}</div><div class="customer-policy">${c.policy_number || 'No policy'}</div></div>
-          </div>
-          <div class="customer-stats">
-            <div class="customer-stat">📄 <span class="customer-stat-value">${c.document_count || 0}</span> docs</div>
-            <div class="customer-stat">📅 ${formatDate(c.created_at)}</div>
-          </div>
-        </div>`).join('')}
-    </div>`;
-    document.querySelectorAll('.customer-card').forEach(card => {
-      card.onclick = () => this.showCustomerDetail(card.dataset.id);
+
+    if (!customers.length) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><h3 class="empty-state-title">No customers found</h3></div>';
+      return;
+    }
+
+    list.innerHTML = `<div class="table-container"><table class="table">
+      <thead><tr><th>Name</th><th>Email / Phone</th><th>Documents</th><th>Portal</th><th>Actions</th></tr></thead>
+      <tbody>
+        ${customers.map(c => renderCustomerRow(c)).join('')}
+      </tbody></table></div>`;
+
+    // Attach event listeners for expanders
+    document.querySelectorAll('.expand-family-btn').forEach(btn => {
+      btn.onclick = (e) => toggleChildren(e.target.closest('tr'), btn.dataset.id);
     });
+  };
+
+  const renderCustomerRow = (c, level = 0) => {
+    const padding = level * 20;
+    // We assume root nodes *might* have children, so we show expander if level 0.
+    // Ideally backend tells us `has_children`. For now, always show expander for roots unless we know otherwise.
+    const showExpander = !c.parent_id;
+
+    return `<tr id="row-${c.id}" data-level="${level}">
+      <td>
+        <div style="display:flex;align-items:center;padding-left:${padding}px;gap:var(--space-2)">
+           ${showExpander ? `<button class="btn btn-ghost btn-xs expand-family-btn" data-id="${c.id}" style="width:20px;height:20px;padding:0;line-height:1">▶</button>` : ''}
+           ${c.parent_id ? '↳ ' : ''}<div class="customer-avatar" style="width:32px;height:32px;font-size:var(--text-xs)">${getInitials(c.name)}</div>
+           <div>
+             <div style="font-weight:var(--font-medium)">${c.name}</div>
+             <div style="font-size:var(--text-xs);color:var(--text-tertiary)">${c.policy_number || 'No Policy #'}</div>
+           </div>
+        </div>
+      </td>
+      <td><div>${c.email || '-'}</div><div style="font-size:var(--text-xs);color:var(--text-tertiary)">${c.phone || '-'}</div></td>
+      <td><span class="badge ${c.document_count > 0 ? 'badge-primary' : 'badge-secondary'}">${c.document_count} Docs</span></td>
+      <td>
+        ${c.linked_username
+        ? `<div style="display:flex;gap:4px;align-items:center">
+             <span class="badge badge-success" title="Linked to user: ${c.linked_username}">Active</span>
+             <button class="btn btn-ghost btn-xs" title="Copy Login Link" onclick="app.copyPortalLink()">🔗</button>
+             <button class="btn btn-ghost btn-xs" title="Disable Access" onclick="app.disablePortal(${c.id})">🚫</button>
+           </div>`
+        : `<button class="btn btn-xs btn-outline-primary" onclick="app.enablePortal(${c.id})">Enable</button>`
+      }
+      </td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="app.showCustomerDetail(${c.id})">View</button>
+        <button class="btn btn-ghost btn-sm" onclick='app.showCustomerModal(${JSON.stringify(c).replace(/"/g, '&quot;')})'>Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="app.deleteCustomer(${c.id})">🗑️</button>
+      </td>
+    </tr>`;
+  };
+
+  const toggleChildren = async (row, parentId) => {
+    const btn = row.querySelector('.expand-family-btn');
+    if (btn.textContent === '▼') {
+      // Collapse
+      btn.textContent = '▶';
+      let next = row.nextElementSibling;
+      while (next && next.dataset.level > row.dataset.level) {
+        const toRemove = next;
+        next = next.nextElementSibling;
+        toRemove.remove();
+      }
+    } else {
+      // Expand
+      const icon = btn.textContent;
+      btn.textContent = '...';
+      try {
+        const { customers: children } = await api.getCustomers({ parent_id: parentId });
+        btn.textContent = '▼';
+        if (children.length === 0) return;
+
+        const html = children.map(child => renderCustomerRow(child, parseInt(row.dataset.level) + 1)).join('');
+        row.insertAdjacentHTML('afterend', html);
+
+        // No listeners needed for children in this 2-level depth (assuming max 2 for Family: Head -> Member)
+        // If we want infinite recursion, we'd need to re-attach listeners for new rows.
+        // For Insurance/Client Family, 2 levels (Head -> Members) is strictly sufficient 99% of cases.
+      } catch (e) {
+        console.error(e);
+        btn.textContent = icon;
+      }
+    }
   };
 
   loadCustomers();
   let searchTimeout;
-  document.getElementById('customer-search').oninput = (e) => {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => loadCustomers(e.target.value), 300);
-  };
-
-  if (canManage) document.getElementById('add-customer-btn').onclick = () => this.showCustomerModal();
+  document.getElementById('cust-search').oninput = (e) => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => loadCustomers(e.target.value), 300); };
+  document.getElementById('add-customer-btn').onclick = () => this.showCustomerModal();
 };
 
-App.prototype.showCustomerModal = function (customer = null) {
-  const isEdit = !!customer;
-  Modal.show(isEdit ? 'Edit Customer' : 'Add Customer', `
-    <div class="form-group"><label class="form-label">Name *</label><input type="text" class="form-input" id="cust-name" value="${customer?.name || ''}"></div>
-    <div class="form-group"><label class="form-label">Phone</label><input type="text" class="form-input" id="cust-phone" value="${customer?.phone || ''}"></div>
-    <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="cust-email" value="${customer?.email || ''}"></div>
-    <div class="form-group"><label class="form-label">Address</label><textarea class="form-textarea" id="cust-address" rows="2">${customer?.address || ''}</textarea></div>
-    <div class="form-group"><label class="form-label">Policy Number</label><input type="text" class="form-input" id="cust-policy" value="${customer?.policy_number || ''}"></div>
-  `, `<button class="btn btn-secondary" onclick="Modal.close()">Cancel</button><button class="btn btn-primary" id="save-customer">${isEdit ? 'Update' : 'Create'}</button>`);
+App.prototype.enablePortal = async function (id) {
+  if (await Modal.confirm('Enable Portal Access?', 'This will allow the customer to log in and view/upload files. They cannot delete files.')) {
+    try {
+      const res = await api.createPortalAccess(id);
+      await Modal.alert('Access Granted', `
+                <p>Portal access created for <strong>${res.email}</strong></p>
+                <div style="background:var(--bg-tertiary);padding:var(--space-3);border-radius:var(--radius-md);margin-top:var(--space-2)">
+                    <p><strong>Username:</strong> ${res.username}</p>
+                    <p><strong>Password:</strong> ${res.tempPassword}</p>
+                </div>
+                <p style="font-size:var(--text-sm);color:var(--text-secondary);margin-top:var(--space-2)">Please copy these credentials and send them to the customer securely.</p>
+            `);
+      this.renderPage('customers');
+    } catch (e) {
+      console.error(e);
+      Toast.error(e.message || 'Failed to enable portal access');
+    }
+  }
+};
 
-  document.getElementById('save-customer').onclick = async () => {
+App.prototype.disablePortal = async function (id) {
+  if (await Modal.confirm('Disable Portal Access?', 'This will revoke login access for this customer. Their user account will be deactivated.')) {
+    try {
+      await api.disablePortalAccess(id);
+      Toast.success('Portal access disabled');
+      this.renderPage('customers');
+    } catch (e) {
+      console.error(e);
+      Toast.error(e.message || 'Failed to disable portal');
+    }
+  }
+};
+
+App.prototype.copyPortalLink = function () {
+  const url = window.location.origin;
+  navigator.clipboard.writeText(url).then(() => Toast.success('Portal Login Link Copied'));
+};
+
+App.prototype.showCustomerModal = function (customer = null, parentId = null) {
+  const isEdit = !!customer;
+  Modal.show(isEdit ? 'Edit Customer' : (parentId ? 'Add Family Member' : 'Add Customer'), `
+    <div class="form-group"><label class="form-label">Name ${parentId ? '(Spouse/Child)' : ''}</label><input type="text" class="form-input" id="cust-name" value="${customer?.name || ''}"></div>
+    <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="cust-email" value="${customer?.email || ''}"></div>
+    <div class="form-group"><label class="form-label">Phone</label><input type="text" class="form-input" id="cust-phone" value="${customer?.phone || ''}"></div>
+    <div class="form-group"><label class="form-label">Policy Number</label><input type="text" class="form-input" id="cust-policy" value="${customer?.policy_number || ''}"></div>
+    <div class="form-group"><label class="form-label">Address</label><textarea class="form-textarea" id="cust-address">${customer?.address || ''}</textarea></div>
+  `, '<button class="btn btn-secondary" onclick="Modal.close()">Cancel</button><button class="btn btn-primary" id="save-cust">Save</button>');
+
+  document.getElementById('save-cust').onclick = async () => {
     const data = {
       name: document.getElementById('cust-name').value.trim(),
-      phone: document.getElementById('cust-phone').value.trim(),
       email: document.getElementById('cust-email').value.trim(),
+      phone: document.getElementById('cust-phone').value.trim(),
+      policy_number: document.getElementById('cust-policy').value.trim(),
       address: document.getElementById('cust-address').value.trim(),
-      policy_number: document.getElementById('cust-policy').value.trim()
+      parent_id: parentId // New logic
     };
-    if (!data.name) { Toast.error('Name is required'); return; }
+    if (!data.name) { Toast.error('Name required'); return; }
     try {
-      if (isEdit) await api.updateCustomer(customer.id, data);
-      else await api.createCustomer(data);
-      Toast.success(isEdit ? 'Customer updated' : 'Customer created');
+      if (isEdit) await api.updateCustomer(customer.id, data); else await api.createCustomer(data);
+      Toast.success(isEdit ? 'Updated' : 'Created');
       Modal.close();
-      this.renderPage('customers');
+      if (parentId) {
+        this.showCustomerDetail(parentId); // Refresh parent details
+      } else {
+        this.renderPage('customers');
+      }
     } catch (e) { Toast.error(e.message); }
   };
 };
@@ -154,10 +268,14 @@ App.prototype.showCustomerDetail = async function (id) {
   try {
     const customer = await api.getCustomer(id);
     const docTypes = await api.getDocumentTypes();
-    const canManage = this.user.role !== 'viewer';
+
+    // Permission Logic
+    const isClient = this.user.role === 'client';
+    const canEdit = this.user.role !== 'viewer';
+    const canDelete = ['admin', 'employee'].includes(this.user.role);
 
     content.innerHTML = `
-      <div style="margin-bottom:var(--space-6)"><button class="btn btn-ghost" id="back-btn">← Back to Customers</button></div>
+      ${!isClient ? '<div style="margin-bottom:var(--space-6)"><button class="btn btn-ghost" id="back-btn">← Back to Customers</button></div>' : ''}
       <div class="card" style="margin-bottom:var(--space-6)">
         <div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-4)">
           <div class="customer-avatar" style="width:64px;height:64px;font-size:var(--text-2xl)">${customer.name.charAt(0).toUpperCase()}</div>
@@ -165,40 +283,96 @@ App.prototype.showCustomerDetail = async function (id) {
             <h2 style="font-size:var(--text-2xl);font-weight:var(--font-bold)">${customer.name}</h2>
             <p style="color:var(--text-secondary)">${customer.policy_number || 'No policy number'}</p>
           </div>
-          ${canManage ? `<div style="margin-left:auto;display:flex;gap:var(--space-2)">
-            <button class="btn btn-secondary" id="edit-cust">Edit</button>
-            <button class="btn btn-danger" id="delete-cust">Delete</button>
-          </div>` : ''}
+          <div style="margin-left:auto;display:flex;gap:var(--space-2)">
+            ${canEdit ? '<button class="btn btn-secondary" id="edit-cust">Edit Profile</button>' : ''}
+            ${canDelete ? '<button class="btn btn-danger" id="delete-cust">Delete</button>' : ''}
+          </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4)">
-          ${customer.phone ? `<div><span style="color:var(--text-tertiary)">Phone:</span><br>${customer.phone}</div>` : ''}
-          ${customer.email ? `<div><span style="color:var(--text-tertiary)">Email:</span><br>${customer.email}</div>` : ''}
-          ${customer.address ? `<div><span style="color:var(--text-tertiary)">Address:</span><br>${customer.address}</div>` : ''}
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:var(--space-6)">
+           <div class="card">
+               <div style="padding:var(--space-4)">
+                   <h4 style="margin-top:0;color:var(--text-secondary);font-size:var(--text-sm);text-transform:uppercase">Contact Info</h4>
+                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)">
+                       <div><label class="form-label">Email</label><div>${customer.email || '-'}</div></div>
+                       <div><label class="form-label">Phone</label><div>${customer.phone || '-'}</div></div>
+                       <div><label class="form-label">Policy #</label><div>${customer.policy_number || '-'}</div></div>
+                       <div><label class="form-label">Address</label><div>${customer.address || '-'}</div></div>
+                       ${customer.parent_name ? `<div><label class="form-label">Head of Family</label><div><a href="#" onclick="app.showCustomerDetail(${customer.parent_id})">${customer.parent_name}</a></div></div>` : ''}
+                   </div>
+               </div>
+           </div>
+           
+           <div class="card">
+             <div class="card-header"><h3 class="card-title">Family / Sub-Accounts</h3></div>
+             <div style="padding:var(--space-4)">
+                ${customer.children && customer.children.length ? `
+                    <ul style="list-style:none;padding:0;margin:0">
+                        ${customer.children.map(child => `
+                            <li style="padding:var(--space-2) 0;border-bottom:1px solid var(--border-secondary);display:flex;justify-content:space-between;align-items:center">
+                                <span>${child.name}</span>
+                                <button class="btn btn-ghost btn-xs" onclick="app.showCustomerDetail(${child.id})">View</button>
+                            </li>
+                        `).join('')}
+                    </ul>
+                ` : '<p style="color:var(--text-tertiary);font-size:var(--text-sm)">No linked accounts</p>'}
+                ${canEdit ? `<button class="btn btn-secondary btn-sm btn-full" style="margin-top:var(--space-4)" onclick='app.showCustomerModal(null, ${customer.id})'>+ Add Family Member</button>` : ''}
+             </div>
+           </div>
         </div>
       </div>
+
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">Documents (${customer.documents?.length || 0})</h3>
-          ${canManage ? '<button class="btn btn-primary btn-sm" id="upload-doc-btn">+ Upload</button>' : ''}
+          ${canEdit ? '<button class="btn btn-primary btn-sm" id="upload-doc-btn">+ Upload</button>' : ''}
         </div>
-        <div id="customer-docs">${customer.documents?.length ? customer.documents.map(d => `
-          <div class="document-item">
-            <div class="document-icon ${d.mime_type?.includes('pdf') ? 'pdf' : 'image'}">${getFileIcon(d.mime_type)}</div>
-            <div class="document-info">
-              <div class="document-name">${d.stored_filename}</div>
-              <div class="document-meta">${d.document_type_name} • ${formatBytes(d.file_size)} • v${d.current_version}</div>
-            </div>
-            <div class="document-actions">
-              <button class="btn btn-ghost btn-sm" onclick="app.showDocumentViewer(${d.id}, '${d.stored_filename}', '${d.mime_type || 'application/pdf'}')">👁️</button>
-              <button class="btn btn-ghost btn-sm" onclick="app.downloadDocument(${d.id}, '${d.stored_filename}')">📥</button>
-              ${canManage ? `<button class="btn btn-ghost btn-sm" onclick="app.deleteDocument(${d.id}, ${id})">🗑️</button>` : ''}
-            </div>
-          </div>`).join('') : '<div class="empty-state"><p style="color:var(--text-tertiary)">No documents uploaded</p></div>'}</div>
+        <div id="customer-docs">
+          ${(() => {
+        const groups = [];
+        // Self
+        const selfDocs = customer.documents?.filter(d => d.customer_id === customer.id) || [];
+        groups.push({ name: isClient ? 'My Documents' : customer.name, docs: selfDocs });
+
+        // Children
+        if (customer.children) {
+          customer.children.forEach(c => {
+            const childDocs = customer.documents?.filter(d => d.customer_id === c.id) || [];
+            groups.push({ name: c.name, docs: childDocs });
+          });
+        }
+
+        return groups.map(g => `
+                <div class="doc-group" style="margin-bottom:var(--space-4)">
+                    <h4 style="font-size:var(--text-sm);color:var(--text-secondary);margin-bottom:var(--space-2);text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid var(--border-secondary);padding-bottom:var(--space-1)">${g.name} (${g.docs.length})</h4>
+                    ${g.docs.length ? g.docs.map(d => `
+                      <div class="document-item">
+                        <div class="document-icon ${d.mime_type?.includes('pdf') ? 'pdf' : 'image'}">${getFileIcon(d.mime_type)}</div>
+                        <div class="document-info">
+                          <div class="document-name">${d.stored_filename}</div>
+                          <div class="document-meta">${d.document_type_name} • ${formatBytes(d.file_size)} • v${d.current_version}</div>
+                        </div>
+                        <div class="document-actions">
+                          <button class="btn btn-ghost btn-sm" onclick="app.showDocumentViewer(${d.id}, '${d.stored_filename}', '${d.mime_type || 'application/pdf'}')">👁️</button>
+                          <button class="btn btn-ghost btn-sm" onclick="app.downloadDocument(${d.id}, '${d.stored_filename}')">📥</button>
+                          ${canDelete ? `<button class="btn btn-ghost btn-sm" onclick="app.deleteDocument(${d.id}, ${id})">🗑️</button>` : ''}
+                        </div>
+                      </div>`).join('')
+            : '<div style="padding:var(--space-3);color:var(--text-tertiary);font-style:italic;font-size:var(--text-sm)">No documents uploaded</div>'}
+                </div>
+            `).join('');
+      })()}
+        </div>
       </div>`;
 
-    document.getElementById('back-btn').onclick = () => this.renderPage('customers');
-    if (canManage) {
+    if (!isClient) document.getElementById('back-btn').onclick = () => this.renderPage('customers');
+
+    if (canEdit) {
       document.getElementById('edit-cust').onclick = () => this.showCustomerModal(customer);
+      document.getElementById('upload-doc-btn').onclick = () => this.showUploadModal(customer, docTypes);
+    }
+
+    if (canDelete) {
       document.getElementById('delete-cust').onclick = async () => {
         if (await Modal.confirm('Delete Customer?', 'This will delete the customer and all documents.')) {
           await api.deleteCustomer(id);
@@ -206,7 +380,6 @@ App.prototype.showCustomerDetail = async function (id) {
           this.renderPage('customers');
         }
       };
-      document.getElementById('upload-doc-btn').onclick = () => this.showUploadModal(customer, docTypes);
     }
   } catch (e) { Toast.error(e.message); this.renderPage('customers'); }
 };

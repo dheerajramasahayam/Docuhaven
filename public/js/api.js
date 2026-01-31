@@ -56,6 +56,8 @@ class ApiClient {
     createCustomer(data) { return this.request('/customers', { method: 'POST', body: data }); }
     updateCustomer(id, data) { return this.request(`/customers/${id}`, { method: 'PUT', body: data }); }
     deleteCustomer(id) { return this.request(`/customers/${id}`, { method: 'DELETE' }); }
+    createPortalAccess(id) { return this.request(`/customers/${id}/create-portal-access`, { method: 'POST' }); }
+    disablePortalAccess(id) { return this.request(`/customers/${id}/disable-portal-access`, { method: 'POST' }); }
 
     // Documents
     getDocuments(params = {}) { return this.request(`/documents?${new URLSearchParams(params)}`); }

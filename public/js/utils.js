@@ -72,6 +72,15 @@ class Modal {
             Modal.show(title, content, footer);
         });
     }
+
+    static alert(title, message) {
+        return new Promise(resolve => {
+            const content = `<p>${message}</p>`;
+            const footer = `<button class="btn btn-primary" onclick="Modal.close(); window._modalResolve(true)">OK</button>`;
+            window._modalResolve = resolve;
+            Modal.show(title, content, footer);
+        });
+    }
 }
 
 window.Toast = Toast;

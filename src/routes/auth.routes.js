@@ -17,8 +17,10 @@ router.post('/login', async (req, res) => {
 
         // Find user by username or email
         const user = db.prepare(`
-      SELECT * FROM users 
-      WHERE (username = ? OR email = ?) AND is_active = 1
+      SELECT u.*, c.id as linked_customer_id
+      FROM users u
+      LEFT JOIN customers c ON c.linked_user_id = u.id
+      WHERE (u.username = ? OR u.email = ?) AND u.is_active = 1
     `).get(username, username);
 
         if (!user) {
@@ -64,7 +66,8 @@ router.post('/login', async (req, res) => {
                 id: user.id,
                 username: user.username,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                linked_customer_id: user.linked_customer_id
             }
         });
 
@@ -76,12 +79,20 @@ router.post('/login', async (req, res) => {
 
 // Get current user
 router.get('/me', require('../middleware/auth').authenticateToken, (req, res) => {
+    const user = db.prepare(`
+        SELECT u.*, c.id as linked_customer_id 
+        FROM users u 
+        LEFT JOIN customers c ON c.linked_user_id = u.id 
+        WHERE u.id = ?
+    `).get(req.user.id);
+
     res.json({
         user: {
-            id: req.user.id,
-            username: req.user.username,
-            email: req.user.email,
-            role: req.user.role
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            linked_customer_id: user.linked_customer_id
         }
     });
 });

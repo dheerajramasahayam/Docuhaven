@@ -37,13 +37,19 @@ class App {
   }
 
   showApp() {
-    // Viewers don't have access to dashboard, redirect to customers
-    if (this.user.role === 'viewer' && this.currentPage === 'dashboard') {
-      this.currentPage = 'customers';
-    }
     document.getElementById('app').innerHTML = this.renderAppLayout();
     this.initAppHandlers();
-    this.navigate(this.currentPage);
+
+    if (this.user.role === 'client' && this.user.linked_customer_id) {
+      // Direct clients to their profile immediately
+      this.currentPage = 'profile';
+      this.navigate('profile');
+    } else if (this.user.role === 'viewer' && this.currentPage === 'dashboard') {
+      this.currentPage = 'customers';
+      this.navigate(this.currentPage);
+    } else {
+      this.navigate(this.currentPage);
+    }
   }
 
   // ============ SETUP PAGE ============
@@ -224,6 +230,7 @@ class App {
   renderAppLayout() {
     const initial = this.user.username.charAt(0).toUpperCase();
     const isAdmin = this.user.role === 'admin';
+    const isClient = this.user.role === 'client';
     const isViewer = this.user.role === 'viewer';
 
     return `
@@ -235,11 +242,15 @@ class App {
           <nav class="sidebar-nav">
             <div class="nav-section">
               <div class="nav-section-title">Main</div>
-              ${!isViewer ? `<div class="nav-item" data-page="dashboard"><span class="nav-item-icon">📊</span>Dashboard</div>` : ''}
-              <div class="nav-item" data-page="customers"><span class="nav-item-icon">👥</span>Customers</div>
-              <div class="nav-item" data-page="documents"><span class="nav-item-icon">📄</span>Documents</div>
+              ${!isClient && !isViewer ? `<div class="nav-item" data-page="dashboard"><span class="nav-item-icon">📊</span>Dashboard</div>` : ''}
+              ${isClient
+        ? `<div class="nav-item" data-page="profile"><span class="nav-item-icon">👤</span>My Profile</div>`
+        : `<div class="nav-item" data-page="customers"><span class="nav-item-icon">👥</span>Customers</div>
+                   <div class="nav-item" data-page="documents"><span class="nav-item-icon">📄</span>Documents</div>`
+      }
             </div>
-            ${isAdmin ? `<div class="nav-section">
+            ${isAdmin ? `
+            <div class="nav-section">
               <div class="nav-section-title">Admin</div>
               <div class="nav-item" data-page="users"><span class="nav-item-icon">👤</span>Users</div>
               <div class="nav-item" data-page="doctypes"><span class="nav-item-icon">🏷️</span>Document Types</div>
@@ -298,6 +309,7 @@ class App {
       case 'doctypes': this.renderDocTypes(content, actions); break;
       case 'audit': this.renderAuditLogs(content); break;
       case 'settings': this.renderSettings(content); break;
+      case 'profile': this.showCustomerDetail(this.user.linked_customer_id); break;
       default: content.innerHTML = '<p>Page not found</p>';
     }
   }

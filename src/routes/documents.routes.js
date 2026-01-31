@@ -116,22 +116,70 @@ router.get('/:id/view', (req, res) => {
 router.use(authenticateToken);
 
 // Get all documents (with optional filters)
-router.get('/', requirePermission('VIEW_DOCUMENTS'), (req, res) => {
+router.get('/', (req, res) => {
+    // Permission check override
+    const ROLES = require('../middleware/rbac').ROLES;
+    const isClient = req.user.role === ROLES.CLIENT;
+
+    // Check permissions manually since we support multiple
+    // Clients have VIEW_OWN_DOCUMENTS, others VIEW_DOCUMENTS
+    // For simplicity, just check roles or update middleware. 
+    // Let's assume valid login.
+
+    // Validation
+    if (isClient) {
+        // Ok
+    } else if ([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.VIEWER].includes(req.user.role)) {
+        // Ok
+    } else {
+        return res.status(403).json({ error: 'Permission denied' });
+    }
+
     try {
         const { customer_id, document_type_id, search, limit = 50, offset = 0 } = req.query;
 
         let sql = `
-      SELECT d.*, 
+       SELECT d.*, 
         c.name as customer_name,
         dt.name as document_type_name,
         u.username as uploaded_by_name
-      FROM documents d
-      LEFT JOIN customers c ON d.customer_id = c.id
-      LEFT JOIN document_types dt ON d.document_type_id = dt.id
-      LEFT JOIN users u ON d.uploaded_by = u.id
-      WHERE 1=1
+       FROM documents d
+       LEFT JOIN customers c ON d.customer_id = c.id
+       LEFT JOIN document_types dt ON d.document_type_id = dt.id
+       LEFT JOIN users u ON d.uploaded_by = u.id
+       WHERE 1=1
     `;
         const params = [];
+
+        // CLIENT PORTAL LOGIC
+        if (isClient) {
+            // Find linked customer
+            const linkedCustomer = db.prepare('SELECT id FROM customers WHERE linked_user_id = ?').get(req.user.id);
+            if (!linkedCustomer) {
+                return res.json({ documents: [], total: 0 }); // No linked customer
+            }
+
+            // Find self and all descendants (Hierarchical)
+            // CTE to get all child IDs
+            const familyTree = db.prepare(`
+                WITH RECURSIVE family_tree(id) AS (
+                    SELECT id FROM customers WHERE id = ?
+                    UNION ALL
+                    SELECT c.id FROM customers c
+                    JOIN family_tree ft ON c.parent_id = ft.id
+                )
+                SELECT id FROM family_tree
+            `).all(linkedCustomer.id);
+
+            const familyIds = familyTree.map(f => f.id);
+
+            if (familyIds.length === 0) {
+                sql += ' AND 1=0'; // Should not happen
+            } else {
+                sql += ` AND d.customer_id IN (${familyIds.map(() => '?').join(',')})`;
+                params.push(...familyIds);
+            }
+        }
 
         if (customer_id) {
             sql += ' AND d.customer_id = ?';
@@ -155,11 +203,31 @@ router.get('/', requirePermission('VIEW_DOCUMENTS'), (req, res) => {
 
         // Get total count
         let countSql = `
-      SELECT COUNT(*) as count FROM documents d
-      LEFT JOIN customers c ON d.customer_id = c.id
-      WHERE 1=1
+       SELECT COUNT(*) as count FROM documents d
+       LEFT JOIN customers c ON d.customer_id = c.id
+       WHERE 1=1
     `;
         const countParams = [];
+
+        // Repeat Client Logic for Count
+        if (isClient) {
+            const linkedCustomer = db.prepare('SELECT id FROM customers WHERE linked_user_id = ?').get(req.user.id);
+            if (!linkedCustomer) {
+                return res.json({ documents: [], total: 0 });
+            }
+            const familyTree = db.prepare(`
+                WITH RECURSIVE family_tree(id) AS (
+                    SELECT id FROM customers WHERE id = ?
+                    UNION ALL
+                    SELECT c.id FROM customers c
+                    JOIN family_tree ft ON c.parent_id = ft.id
+                )
+                SELECT id FROM family_tree
+            `).all(linkedCustomer.id);
+            const familyIds = familyTree.map(f => f.id);
+            countSql += ` AND d.customer_id IN (${familyIds.map(() => '?').join(',')})`;
+            countParams.push(...familyIds);
+        }
 
         if (customer_id) {
             countSql += ' AND d.customer_id = ?';
@@ -221,9 +289,34 @@ router.get('/:id', requirePermission('VIEW_DOCUMENTS'), (req, res) => {
 });
 
 // Upload document
-router.post('/upload', requirePermission('UPLOAD_DOCUMENTS'), upload.single('file'), handleUploadError, (req, res) => {
+router.post('/upload', upload.single('file'), handleUploadError, async (req, res) => {
     try {
         const { customer_id, document_type_id } = req.body;
+
+        // Permission Check
+        const canUpload = ['admin', 'employee'].includes(req.user.role);
+        let isClientAllowed = false;
+
+        if (req.user.role === 'client' && customer_id) {
+            const targetCustomer = db.prepare('SELECT id, parent_id, linked_user_id FROM customers WHERE id = ?').get(customer_id);
+            if (targetCustomer) {
+                // Uploading to own profile
+                if (targetCustomer.linked_user_id === req.user.id) {
+                    isClientAllowed = true;
+                }
+                // Uploading to family member profile (if I am the parent)
+                else if (targetCustomer.parent_id) {
+                    const parent = db.prepare('SELECT linked_user_id FROM customers WHERE id = ?').get(targetCustomer.parent_id);
+                    if (parent && parent.linked_user_id === req.user.id) {
+                        isClientAllowed = true;
+                    }
+                }
+            }
+        }
+
+        if (!canUpload && !isClientAllowed) {
+            return res.status(403).json({ error: 'You do not have permission to upload documents' });
+        }
 
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
