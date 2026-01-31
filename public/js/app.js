@@ -62,7 +62,7 @@ class App {
             <h1 class="auth-title">Welcome!</h1>
             <p class="auth-subtitle">Let's set up your DocuHaven</p>
           </div>
-          <div class="setup-steps"><div class="setup-step active"></div><div class="setup-step"></div><div class="setup-step"></div><div class="setup-step"></div></div>
+          <div class="setup-steps"><div class="setup-step active"></div><div class="setup-step"></div><div class="setup-step"></div><div class="setup-step"></div><div class="setup-step"></div></div>
           <div id="setup-content"></div>
         </div>
       </div>`;
@@ -70,7 +70,7 @@ class App {
 
   initSetupHandlers() {
     this.setupStep = 1;
-    this.setupData = { admin: {}, documentTypes: [], backupConfig: {} };
+    this.setupData = { admin: {}, documentTypes: [], customerFields: { required: ['name'], optional: [], custom: [] }, backupConfig: {} };
     this.renderSetupStep();
   }
 
@@ -143,6 +143,67 @@ class App {
         this.renderSetupStep();
       };
     } else if (this.setupStep === 3) {
+      // Customer Fields Step
+      content.innerHTML = `
+        <h3 style="margin-bottom:var(--space-4)">Customer Fields</h3>
+        <p style="color:var(--text-secondary);margin-bottom:var(--space-4);font-size:var(--text-sm)">Configure what information to collect for each customer.</p>
+        
+        <div class="form-group">
+            <label class="form-label">Standard Fields</label>
+            <div style="background:var(--bg-tertiary);padding:var(--space-3);border-radius:var(--radius-md)">
+                <label style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2);opacity:0.7"><input type="checkbox" checked disabled> Name (Required)</label>
+                <label style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2);cursor:pointer"><input type="checkbox" id="field-phone" checked> Phone Number</label>
+                <label style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2);cursor:pointer"><input type="checkbox" id="field-email" checked> Email Address</label>
+                <label style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2);cursor:pointer"><input type="checkbox" id="field-address" checked> Physical Address</label>
+                <label style="display:flex;align-items:center;gap:var(--space-2);cursor:pointer"><input type="checkbox" id="field-policy" checked> Policy Number</label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Custom Fields</label>
+            <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-2)">
+                <input type="text" id="new-custom-field" class="form-input" placeholder="e.g. Tax ID" style="flex:1">
+                <button class="btn btn-secondary" id="add-field-btn">Add</button>
+            </div>
+            <div id="custom-fields-list" style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
+                ${(this.setupData.customerFields?.custom || []).map(f => `<span class="badge badge-primary" style="background:var(--primary);color:white;padding:2px 8px;border-radius:12px;font-size:12px">${f}</span>`).join('')}
+            </div>
+        </div>
+
+        <div style="display:flex;gap:var(--space-3);margin-top:var(--space-6)">
+          <button class="btn btn-secondary" id="setup-back">← Back</button>
+          <button class="btn btn-primary btn-full btn-lg" id="setup-next">Continue →</button>
+        </div>`;
+
+      const opts = this.setupData.customerFields?.optional || ['phone', 'email', 'address', 'policy_number'];
+      if (!opts.includes('phone')) document.getElementById('field-phone').checked = false;
+      if (!opts.includes('email')) document.getElementById('field-email').checked = false;
+      if (!opts.includes('address')) document.getElementById('field-address').checked = false;
+      if (!opts.includes('policy_number')) document.getElementById('field-policy').checked = false;
+
+      document.getElementById('add-field-btn').onclick = () => {
+        const val = document.getElementById('new-custom-field').value.trim();
+        if (!val) return;
+        const current = this.setupData.customerFields?.custom || [];
+        if (!current.includes(val)) {
+          this.setupData.customerFields.custom = [...current, val];
+          this.renderSetupStep(); // Re-render to show new badge
+        }
+      };
+
+      document.getElementById('setup-back').onclick = () => { this.setupStep = 2; this.renderSetupStep(); };
+      document.getElementById('setup-next').onclick = () => {
+        const optional = [];
+        if (document.getElementById('field-phone').checked) optional.push('phone');
+        if (document.getElementById('field-email').checked) optional.push('email');
+        if (document.getElementById('field-address').checked) optional.push('address');
+        if (document.getElementById('field-policy').checked) optional.push('policy_number');
+
+        this.setupData.customerFields.optional = optional;
+        this.setupStep = 4;
+        this.renderSetupStep();
+      };
+    } else if (this.setupStep === 4) {
       content.innerHTML = `
         <h3 style="margin-bottom:var(--space-4)">Backup Configuration</h3>
         <p style="color:var(--text-secondary);margin-bottom:var(--space-4);font-size:var(--text-sm)">Secure your data with automatic backups.</p>
@@ -180,7 +241,7 @@ class App {
         if (!path1) { Toast.error('Primary Backup Path is required'); return; }
 
         this.setupData.backupConfig = { localPath1: path1, localPath2: path2, cloudEnabled };
-        this.setupStep = 4;
+        this.setupStep = 5;
         this.renderSetupStep();
       };
     } else {
@@ -195,7 +256,7 @@ class App {
           <button class="btn btn-secondary" id="setup-back">← Back</button>
           <button class="btn btn-success btn-full btn-lg" id="setup-complete">🚀 Complete Setup</button>
         </div>`;
-      document.getElementById('setup-back').onclick = () => { this.setupStep = 3; this.renderSetupStep(); };
+      document.getElementById('setup-back').onclick = () => { this.setupStep = 4; this.renderSetupStep(); };
       document.getElementById('setup-complete').onclick = async () => {
         try {
           const btn = document.getElementById('setup-complete');
