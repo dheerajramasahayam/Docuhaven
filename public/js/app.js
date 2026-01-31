@@ -105,6 +105,12 @@ class App {
       content.innerHTML = `
         <h3 style="margin-bottom:var(--space-4)">Document Types</h3>
         <p style="color:var(--text-secondary);margin-bottom:var(--space-4);font-size:var(--text-sm)">Select document types for your organization:</p>
+        
+        <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-4)">
+            <input type="text" id="new-type-name" class="form-input" placeholder="Add custom type..." style="flex:1">
+            <button class="btn btn-secondary" id="add-type-btn">Add</button>
+        </div>
+
         <div id="doc-types-list" style="max-height:300px;overflow-y:auto;margin-bottom:var(--space-6)">
           ${defaults.map((d, i) => `<label style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3);background:var(--bg-card);border-radius:var(--radius-md);margin-bottom:var(--space-2);cursor:pointer"><input type="checkbox" checked data-name="${d.name}" data-desc="${d.description || ''}" style="width:18px;height:18px"><span style="flex:1">${d.name}</span></label>`).join('')}
         </div>
@@ -112,6 +118,22 @@ class App {
           <button class="btn btn-secondary" id="setup-back">← Back</button>
           <button class="btn btn-primary btn-full btn-lg" id="setup-next">Continue →</button>
         </div>`;
+
+      // Handler for adding custom types
+      document.getElementById('add-type-btn').onclick = () => {
+        const input = document.getElementById('new-type-name');
+        const name = input.value.trim();
+        if (!name) return;
+
+        const list = document.getElementById('doc-types-list');
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = `<label style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3);background:var(--bg-card);border-radius:var(--radius-md);margin-bottom:var(--space-2);cursor:pointer"><input type="checkbox" checked data-name="${name}" data-desc="Custom Type" style="width:18px;height:18px"><span style="flex:1">${name}</span></label>`;
+
+        list.insertBefore(tempDiv.firstChild, list.firstChild); // Add to top for visibility
+        input.value = '';
+        input.focus();
+      };
+
       document.getElementById('setup-back').onclick = () => { this.setupStep = 1; this.renderSetupStep(); };
       document.getElementById('setup-next').onclick = () => {
         const checked = document.querySelectorAll('#doc-types-list input:checked');
