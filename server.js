@@ -80,13 +80,31 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+// Start server
+app.listen(PORT, '0.0.0.0', () => {
+    const os = require('os');
+    let localIp = 'localhost';
+
+    // Find local IP address
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                localIp = iface.address;
+                break;
+            }
+        }
+        if (localIp !== 'localhost') break;
+    }
+
     console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
 ║   🏰  DocuHaven - Open Source DMS                          ║
 ║                                                            ║
-║   Server running at: http://localhost:${PORT}                 ║
+║   Server running at:                                       ║
+║   ➜ Local:   http://localhost:${PORT}                          ║
+║   ➜ Network: http://${localIp}:${PORT}                         ║
 ║                                                            ║
 ║   Setup Complete: ${isSetupComplete() ? 'Yes ✓' : 'No - Visit the app to set up'}              ║
 ║                                                            ║
