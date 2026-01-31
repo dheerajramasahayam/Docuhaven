@@ -83,22 +83,27 @@ git pull origin main
 echo "📦 Installing project dependencies..."
 npm install || { echo "❌ npm install failed"; exit 1; }
 
-# 3. Check for database migrations (if any in future)
+# 5. Check for database migrations (if any in future)
 # npm run migrate 
 
-# 4. Restart Application using PM2
+# 6. Restart Application using PM2
 if command -v pm2 &> /dev/null
 then
     echo "🔄 Restarting application..."
     pm2 restart ecosystem.config.js --env production || pm2 start ecosystem.config.js --env production
     pm2 save
 else
-    echo "⚠️  PM2 not found. Installing global PM2..."
-    npm install -g pm2
-    echo "🔄 Starting application..."
-    pm2 start ecosystem.config.js --env production
-    pm2 save
+    # This shouldn't happen due to auto-install above, but fallback just in case
+    echo "⚠️  PM2 still not found? Using simple node start..."
+    npm start &
 fi
 
-echo "✅ Deployment Complete! Server running."
+echo "✅ Deployment Complete! Server is running."
+echo ""
+echo "🔥 IMPORTANT FIREWALL CHECK 🔥"
+echo "If you cannot access the site via IP, make sure Port 3000 is OPEN."
+echo "   - AWS/GCP/Azure: Check 'Security Groups' or 'Firewall Rules'."
+echo "   - Ubuntu (UFW): run 'sudo ufw allow 3000'"
+echo ""
 pm2 status
+
