@@ -2,7 +2,15 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const bcrypt = require('bcrypt');
 
+const fs = require('fs');
+
 const dbPath = path.join(__dirname, '../../data/fileorg.db');
+// Ensure data directory exists before opening DB
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 const db = new Database(dbPath);
 
 // Enable foreign keys
