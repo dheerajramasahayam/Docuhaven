@@ -18,10 +18,10 @@ if ! command -v npm &> /dev/null; then
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
     
-    # Install Node LTS
-    echo "📦 Installing Node.js LTS..."
-    nvm install --lts
-    nvm use --lts
+    # Install Node.js 22 (LTS) - Matches local dev environment
+    echo "📦 Installing Node.js 22..."
+    nvm install 22
+    nvm use 22
     
     if ! command -v npm &> /dev/null; then
         echo "❌ Critical: Failed to install Node.js/npm. Please install manually."
