@@ -252,7 +252,11 @@ class App {
           <button class="btn btn-primary btn-full btn-lg" id="setup-next">Continue →</button>
         </div>`;
 
-      document.getElementById('setup-back').onclick = () => { this.setupStep = 2; this.renderSetupStep(); };
+      document.getElementById('setup-back').onclick = () => { this.setupStep = 3; this.renderSetupStep(); };
+
+      document.getElementById('browse-path1').onclick = () => this.showDirectoryBrowser('backup-path1');
+      document.getElementById('browse-path2').onclick = () => this.showDirectoryBrowser('backup-path2');
+
       document.getElementById('setup-next').onclick = () => {
         const path1 = document.getElementById('backup-path1').value.trim();
         const path2 = document.getElementById('backup-path2').value.trim();
