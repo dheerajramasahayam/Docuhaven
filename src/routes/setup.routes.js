@@ -4,6 +4,9 @@ const { db, isSetupComplete, markSetupComplete, getDefaultDocumentTypes } = requ
 const { generateToken } = require('../middleware/auth');
 const { logAction, ACTIONS } = require('../services/auditService');
 const backupService = require('../services/backupService');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 const router = express.Router();
 
@@ -11,6 +14,42 @@ const router = express.Router();
 router.get('/status', (req, res) => {
     const setupComplete = isSetupComplete();
     res.json({ setupComplete });
+});
+
+// Browse server directories
+router.post('/fs/browse', (req, res) => {
+    try {
+        const targetPath = req.body.path || os.homedir(); // Default to home (safe start)
+
+        // Security check: simple one, can be expanded. 
+        // We only allow listing if we can access it.
+
+        if (!fs.existsSync(targetPath)) {
+            return res.status(404).json({ error: 'Path not found' });
+        }
+
+        const items = fs.readdirSync(targetPath, { withFileTypes: true });
+
+        const directories = items
+            .filter(item => item.isDirectory() && !item.name.startsWith('.'))
+            .map(item => ({
+                name: item.name,
+                path: path.join(targetPath, item.name)
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        const parent = path.dirname(targetPath);
+
+        res.json({
+            current: targetPath,
+            parent: parent === targetPath ? null : parent, // Stop at root
+            directories
+        });
+
+    } catch (error) {
+        console.error('Browse fs error:', error);
+        res.status(500).json({ error: 'Failed to list directories: ' + error.message });
+    }
 });
 
 // Complete initial setup

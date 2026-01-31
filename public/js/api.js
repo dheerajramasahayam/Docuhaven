@@ -32,6 +32,7 @@ class ApiClient {
     getSetupStatus() { return this.request('/setup/status'); }
     completeSetup(data) { return this.request('/setup/complete', { method: 'POST', body: data }); }
     getDefaultDocumentTypes() { return this.request('/setup/default-document-types'); }
+    browseServerFs(path) { return this.request('/setup/fs/browse', { method: 'POST', body: { path } }); }
 
     // Auth
     async login(username, password) {

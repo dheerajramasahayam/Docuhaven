@@ -70,7 +70,13 @@ class App {
 
   initSetupHandlers() {
     this.setupStep = 1;
-    this.setupData = { admin: {}, documentTypes: [], customerFields: { required: ['name'], optional: [], custom: [] }, backupConfig: {} };
+    this.setupStep = 1;
+    this.setupData = {
+      admin: {},
+      documentTypes: [],
+      customerFields: { required: ['name'], optional: ['phone', 'email', 'address', 'policy_number'], custom: [] },
+      backupConfig: {}
+    };
     this.renderSetupStep();
   }
 
@@ -186,8 +192,16 @@ class App {
         if (!val) return;
         const current = this.setupData.customerFields?.custom || [];
         if (!current.includes(val)) {
+          // SAVE STATE of checkboxes before re-rendering
+          const optional = [];
+          if (document.getElementById('field-phone').checked) optional.push('phone');
+          if (document.getElementById('field-email').checked) optional.push('email');
+          if (document.getElementById('field-address').checked) optional.push('address');
+          if (document.getElementById('field-policy').checked) optional.push('policy_number');
+          this.setupData.customerFields.optional = optional;
+
           this.setupData.customerFields.custom = [...current, val];
-          this.renderSetupStep(); // Re-render to show new badge
+          this.renderSetupStep();
         }
       };
 
@@ -210,13 +224,19 @@ class App {
         
         <div class="form-group">
             <label class="form-label">Primary Backup Path (Required)</label>
-            <input type="text" class="form-input" id="backup-path1" placeholder="/path/to/backup/drive" value="${this.setupData.backupConfig?.localPath1 || ''}">
-            <p style="font-size:var(--text-xs);color:var(--text-tertiary);margin-top:var(--space-1)">Absolute path to a secure directory (e.g., /mnt/backup_drive).</p>
+            <div style="display:flex;gap:var(--space-2)">
+                <input type="text" class="form-input" id="backup-path1" placeholder="/path/to/backup/drive" value="${this.setupData.backupConfig?.localPath1 || ''}" style="flex:1">
+                <button class="btn btn-secondary" id="browse-path1">📂 Browse</button>
+            </div>
+            <p style="font-size:var(--text-xs);color:var(--text-tertiary);margin-top:var(--space-1)">Absolute path on the SERVER where backups will be stored.</p>
         </div>
 
         <div class="form-group">
             <label class="form-label">Secondary Backup Path (Recommended)</label>
-            <input type="text" class="form-input" id="backup-path2" placeholder="/path/to/another/drive" value="${this.setupData.backupConfig?.localPath2 || ''}">
+            <div style="display:flex;gap:var(--space-2)">
+                <input type="text" class="form-input" id="backup-path2" placeholder="/path/to/another/drive" value="${this.setupData.backupConfig?.localPath2 || ''}" style="flex:1">
+                <button class="btn btn-secondary" id="browse-path2">📂 Browse</button>
+            </div>
             <p style="font-size:var(--text-xs);color:var(--text-tertiary);margin-top:var(--space-1)">A different physical drive is recommended.</p>
         </div>
 
@@ -268,6 +288,100 @@ class App {
         } catch (e) { Toast.error(e.message); }
       };
     }
+  }
+
+  async showDirectoryBrowser(targetInputId) {
+    const input = document.getElementById(targetInputId);
+    let currentPath = input.value || '';
+
+    // Create modal functionality inline for setup
+    const modalHtml = `
+        <div class="modal-overlay active" id="browser-modal">
+            <div class="modal-container" style="max-width:600px;height:500px;display:flex;flex-direction:column">
+                <div class="modal-header">
+                    <h3 class="modal-title">Select Directory</h3>
+                    <button class="btn btn-ghost btn-sm" id="close-browser">✕</button>
+                </div>
+                <div style="padding:var(--space-3);background:var(--bg-tertiary);border-bottom:1px solid var(--border-secondary)">
+                    <div style="font-size:var(--text-xs);text-transform:uppercase;color:var(--text-tertiary);margin-bottom:4px">Current Path</div>
+                    <div id="browser-current-path" style="font-family:monospace;font-weight:600;word-break:break-all">...</div>
+                </div>
+                <div id="browser-list" style="flex:1;overflow-y:auto;padding:var(--space-2)">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="modal-footer" style="margin-top:0;border-top:1px solid var(--border-secondary)">
+                    <button class="btn btn-secondary" id="cancel-browser">Cancel</button>
+                    <button class="btn btn-primary" id="select-browser">Select this Folder</button>
+                </div>
+            </div>
+        </div>
+     `;
+
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = modalHtml;
+    const overlay = tempDiv.firstElementChild;
+    document.body.appendChild(overlay);
+
+    let selectedPath = '';
+
+    const loadDir = async (path = '') => {
+      const list = document.getElementById('browser-list');
+      const pathDisplay = document.getElementById('browser-current-path');
+      list.innerHTML = '<div class="loading-content"><div class="loading-spinner"></div></div>';
+
+      try {
+        const data = await api.browseServerFs(path);
+        selectedPath = data.current;
+        pathDisplay.textContent = data.current;
+
+        list.innerHTML = '';
+
+        // Parent directory
+        if (data.parent) {
+          const row = document.createElement('div');
+          row.style.cssText = 'padding:var(--space-3);cursor:pointer;display:flex;align-items:center;gap:var(--space-3);border-radius:var(--radius-md);margin-bottom:4px;background:var(--bg-secondary)';
+          row.innerHTML = `<span style="font-size:1.2em">🔙</span> <strong>.. (Parent Directory)</strong>`;
+          row.onclick = () => loadDir(data.parent);
+          list.appendChild(row);
+        }
+
+        if (data.directories.length === 0) {
+          list.innerHTML += '<div style="padding:var(--space-4);text-align:center;color:var(--text-tertiary)">No subdirectories found</div>';
+        } else {
+          data.directories.forEach(dir => {
+            const row = document.createElement('div');
+            row.className = 'browser-item'; // CSS class needed or inline style
+            row.style.cssText = 'padding:var(--space-3);cursor:pointer;display:flex;align-items:center;gap:var(--space-3);border-radius:var(--radius-md);margin-bottom:4px;transition:background 0.2s';
+            row.innerHTML = `<span style="font-size:1.2em">📁</span> <span>${dir.name}</span>`;
+            row.onmouseover = () => row.style.background = 'var(--bg-tertiary)';
+            row.onmouseout = () => row.style.background = 'transparent';
+            row.onclick = () => loadDir(dir.path);
+            list.appendChild(row);
+          });
+        }
+
+      } catch (e) {
+        list.innerHTML = `<div style="color:var(--error);padding:var(--space-3)">${e.message}</div>`;
+      }
+    };
+
+    // Initial load
+    await loadDir(currentPath);
+
+    const closeModal = () => overlay.remove();
+
+    document.getElementById('close-browser').onclick = closeModal;
+    document.getElementById('cancel-browser').onclick = closeModal;
+    document.getElementById('select-browser').onclick = () => {
+      if (selectedPath) {
+        document.getElementById(targetInputId).value = selectedPath;
+        // Update state too if needed, but 'setup-next' reads value so it's fine.
+        // Actually, for consistency if we switch steps:
+        if (targetInputId === 'backup-path1') this.setupData.backupConfig.localPath1 = selectedPath;
+        if (targetInputId === 'backup-path2') this.setupData.backupConfig.localPath2 = selectedPath;
+      }
+      closeModal();
+    };
   }
 
   // ============ LOGIN PAGE ============
