@@ -30,6 +30,25 @@ if ! command -v npm &> /dev/null; then
     echo "✅ Node.js installed."
 fi
 
+# --- 1.5 Ensure Build Tools (for native modules like sqlite3) ---
+if ! command -v make &> /dev/null; then
+    echo "⚠️  'make' command not found. Installing build tools..."
+    if [ -f /etc/debian_version ]; then
+        # Debian/Ubuntu
+        apt-get update && apt-get install -y build-essential python3
+    elif [ -f /etc/redhat-release ]; then
+        # RHEL/CentOS
+        yum groupinstall -y 'Development Tools'
+    elif [ -f /etc/alpine-release ]; then
+        # Alpine
+        apk add --no-cache make gcc g++ python3
+    else
+        echo "❌ build tools missing and unknown OS. Please install 'make' and 'g++' manually."
+        exit 1
+    fi
+    echo "✅ Build tools installed."
+fi
+
 # --- 2. Ensure PM2 is installed ---
 if ! command -v pm2 &> /dev/null; then
     echo "⚠️  PM2 not found. Installing global PM2..."
