@@ -86,6 +86,23 @@ npm install || { echo "❌ npm install failed"; exit 1; }
 # 5. Check for database migrations (if any in future)
 # npm run migrate 
 
+# --- 1.8 Grant Permission for Port 80 (Privileged Port) ---
+if [ "$EUID" -eq 0 ]; then
+    echo "🔐 Granting Node.js permission to bind to Port 80..."
+    # Attempt to install setcap if missing
+    if ! command -v setcap &> /dev/null; then
+        if [ -f /etc/debian_version ]; then apt-get install -y libcap2-bin; fi
+    fi
+    
+    # Find node path and grant capabilities
+    NODE_PATH=$(which node)
+    if [ -n "$NODE_PATH" ]; then
+        setcap cap_net_bind_service=+ep "$NODE_PATH" || echo "⚠️  Failed to setcap. If app fails to start on Port 80, run as root."
+    fi
+    echo "✅ Permissions granted."
+fi
+
+
 # 6. Restart Application using PM2
 if command -v pm2 &> /dev/null
 then
@@ -95,15 +112,16 @@ then
 else
     # This shouldn't happen due to auto-install above, but fallback just in case
     echo "⚠️  PM2 still not found? Using simple node start..."
+    # Note: simple 'npm start' might fail on port 80 without sudo if setcap didn't work
     npm start &
 fi
 
 echo "✅ Deployment Complete! Server is running."
 echo ""
 echo "🔥 IMPORTANT FIREWALL CHECK 🔥"
-echo "If you cannot access the site via IP, make sure Port 3000 is OPEN."
+echo "If you cannot access the site, make sure Port 80 (HTTP) is OPEN."
 echo "   - AWS/GCP/Azure: Check 'Security Groups' or 'Firewall Rules'."
-echo "   - Ubuntu (UFW): run 'sudo ufw allow 3000'"
+echo "   - Ubuntu (UFW): run 'sudo ufw allow 80'"
 echo ""
 pm2 status
 
