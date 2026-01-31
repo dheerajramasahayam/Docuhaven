@@ -188,20 +188,31 @@ class App {
       if (!opts.includes('policy_number')) document.getElementById('field-policy').checked = false;
 
       document.getElementById('add-field-btn').onclick = () => {
-        const val = document.getElementById('new-custom-field').value.trim();
+        const input = document.getElementById('new-custom-field');
+        const val = input.value.trim();
         if (!val) return;
-        const current = this.setupData.customerFields?.custom || [];
-        if (!current.includes(val)) {
-          // SAVE STATE of checkboxes before re-rendering
-          const optional = [];
-          if (document.getElementById('field-phone').checked) optional.push('phone');
-          if (document.getElementById('field-email').checked) optional.push('email');
-          if (document.getElementById('field-address').checked) optional.push('address');
-          if (document.getElementById('field-policy').checked) optional.push('policy_number');
-          this.setupData.customerFields.optional = optional;
 
-          this.setupData.customerFields.custom = [...current, val];
-          this.renderSetupStep();
+        // Update state
+        if (!this.setupData.customerFields) this.setupData.customerFields = { custom: [] };
+        if (!this.setupData.customerFields.custom) this.setupData.customerFields.custom = [];
+
+        const current = this.setupData.customerFields.custom;
+        if (!current.includes(val)) {
+          this.setupData.customerFields.custom.push(val);
+
+          // Update DOM directly
+          const list = document.getElementById('custom-fields-list');
+          const badge = document.createElement('span');
+          badge.className = 'badge badge-primary';
+          badge.style.cssText = 'background:var(--primary);color:white;padding:2px 8px;border-radius:12px;font-size:12px';
+          badge.textContent = val;
+          list.appendChild(badge);
+
+          input.value = '';
+          input.focus();
+        } else {
+          input.value = '';
+          Toast.info('Field already exists');
         }
       };
 
