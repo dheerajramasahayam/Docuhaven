@@ -30,6 +30,23 @@ if ! command -v npm &> /dev/null; then
     echo "✅ Node.js installed."
 fi
 
+# --- 1.2 Ensure Swap Space (Critical for small VPS compiling sqlite3) ---
+if [ "$EUID" -eq 0 ]; then 
+    TOTAL_MEM=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    SWAP_TOTAL=$(grep SwapTotal /proc/meminfo | awk '{print $2}')
+    
+    # If memory is < 2GB and no swap, create 1GB swap
+    if [ $TOTAL_MEM -lt 2000000 ] && [ $SWAP_TOTAL -eq 0 ]; then
+        echo "⚠️  Low memory detected. Creating 1GB swap file to prevent build crashes..."
+        fallocate -l 1G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=1024
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        echo "✅ Swap created."
+    fi
+fi
+
 # --- 1.5 Ensure Build Tools (for native modules like sqlite3) ---
 if ! command -v make &> /dev/null; then
     echo "⚠️  'make' command not found. Installing build tools..."
