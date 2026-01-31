@@ -229,25 +229,52 @@ App.prototype.copyPortalLink = function () {
   navigator.clipboard.writeText(url).then(() => Toast.success('Portal Login Link Copied'));
 };
 
-App.prototype.showCustomerModal = function (customer = null, parentId = null) {
+App.prototype.showCustomerModal = async function (customer = null, parentId = null) {
   const isEdit = !!customer;
-  Modal.show(isEdit ? 'Edit Customer' : (parentId ? 'Add Family Member' : 'Add Customer'), `
-    <div class="form-group"><label class="form-label">Name ${parentId ? '(Spouse/Child)' : ''}</label><input type="text" class="form-input" id="cust-name" value="${customer?.name || ''}"></div>
-    <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="cust-email" value="${customer?.email || ''}"></div>
-    <div class="form-group"><label class="form-label">Phone</label><input type="text" class="form-input" id="cust-phone" value="${customer?.phone || ''}"></div>
-    <div class="form-group"><label class="form-label">Policy Number</label><input type="text" class="form-input" id="cust-policy" value="${customer?.policy_number || ''}"></div>
-    <div class="form-group"><label class="form-label">Address</label><textarea class="form-textarea" id="cust-address">${customer?.address || ''}</textarea></div>
-  `, '<button class="btn btn-secondary" onclick="Modal.close()">Cancel</button><button class="btn btn-primary" id="save-cust">Save</button>');
+  const config = await api.getCustomerFieldsConfig();
+  const customValues = (customer && typeof customer.custom_fields === 'string')
+    ? JSON.parse(customer.custom_fields || '{}')
+    : (customer?.custom_fields || {});
+
+  // Helper to check if standard field is enabled
+  const isEnabled = (field) => config.optional.includes(field);
+
+  let formHtml = `<div class="form-group"><label class="form-label">Name ${parentId ? '(Spouse/Child)' : ''}</label><input type="text" class="form-input" id="cust-name" value="${customer?.name || ''}"></div>`;
+
+  if (isEnabled('email')) formHtml += `<div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="cust-email" value="${customer?.email || ''}"></div>`;
+  if (isEnabled('phone')) formHtml += `<div class="form-group"><label class="form-label">Phone</label><input type="text" class="form-input" id="cust-phone" value="${customer?.phone || ''}"></div>`;
+  if (isEnabled('policy_number')) formHtml += `<div class="form-group"><label class="form-label">Policy Number</label><input type="text" class="form-input" id="cust-policy" value="${customer?.policy_number || ''}"></div>`;
+  if (isEnabled('address')) formHtml += `<div class="form-group"><label class="form-label">Address</label><textarea class="form-textarea" id="cust-address">${customer?.address || ''}</textarea></div>`;
+
+  // Custom Fields
+  if (config.custom && config.custom.length > 0) {
+    formHtml += `<div style="margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--border-secondary)"><h4 style="font-size:var(--text-sm);color:var(--text-secondary);margin-bottom:var(--space-3)">Additional Info</h4>`;
+    config.custom.forEach(field => {
+      const val = customValues[field] || '';
+      formHtml += `<div class="form-group"><label class="form-label">${field}</label><input type="text" class="form-input custom-field-input" data-field="${field}" value="${val}"></div>`;
+    });
+    formHtml += `</div>`;
+  }
+
+  Modal.show(isEdit ? 'Edit Customer' : (parentId ? 'Add Family Member' : 'Add Customer'), formHtml,
+    '<button class="btn btn-secondary" onclick="Modal.close()">Cancel</button><button class="btn btn-primary" id="save-cust">Save</button>');
 
   document.getElementById('save-cust').onclick = async () => {
     const data = {
       name: document.getElementById('cust-name').value.trim(),
-      email: document.getElementById('cust-email').value.trim(),
-      phone: document.getElementById('cust-phone').value.trim(),
-      policy_number: document.getElementById('cust-policy').value.trim(),
-      address: document.getElementById('cust-address').value.trim(),
-      parent_id: parentId // New logic
+      email: document.getElementById('cust-email') ? document.getElementById('cust-email').value.trim() : null,
+      phone: document.getElementById('cust-phone') ? document.getElementById('cust-phone').value.trim() : null,
+      policy_number: document.getElementById('cust-policy') ? document.getElementById('cust-policy').value.trim() : null,
+      address: document.getElementById('cust-address') ? document.getElementById('cust-address').value.trim() : null,
+      parent_id: parentId,
+      custom_fields: {}
     };
+
+    // Collect custom fields
+    document.querySelectorAll('.custom-field-input').forEach(input => {
+      data.custom_fields[input.dataset.field] = input.value.trim();
+    });
+
     if (!data.name) { Toast.error('Name required'); return; }
     try {
       if (isEdit) await api.updateCustomer(customer.id, data); else await api.createCustomer(data);

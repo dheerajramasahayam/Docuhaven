@@ -83,6 +83,7 @@ class ApiClient {
     getAuditLogs(params = {}) { return this.request(`/audit-logs?${new URLSearchParams(params)}`); }
     getDashboardStats() { return this.request('/dashboard/stats'); }
     getSettings() { return this.request('/settings'); }
+    getCustomerFieldsConfig() { return this.request('/settings/customer-fields/config'); }
     updateSetting(key, value) { return this.request(`/settings/${key}`, { method: 'PUT', body: { value } }); }
 
     // Backup

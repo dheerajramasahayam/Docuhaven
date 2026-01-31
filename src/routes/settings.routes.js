@@ -7,7 +7,29 @@ const { logAction, ACTIONS } = require('../services/auditService');
 const router = express.Router();
 
 // All routes require authentication and admin permission
+// All routes require authentication
 router.use(authenticateToken);
+
+// Get customer field configuration (Buffered from permission check so employees can see it)
+router.get('/customer-fields/config', (req, res) => {
+    try {
+        const setting = db.prepare('SELECT value FROM settings WHERE key = ?').get('customer_fields');
+
+        if (!setting) {
+            return res.json({
+                required: ['name'],
+                optional: ['phone', 'email', 'address', 'policy_number'],
+                custom: []
+            });
+        }
+
+        res.json(JSON.parse(setting.value));
+    } catch (error) {
+        console.error('Get customer fields error:', error);
+        res.status(500).json({ error: 'Failed to get customer fields configuration' });
+    }
+});
+
 router.use(requirePermission('MANAGE_SETTINGS'));
 
 // Get all settings
@@ -97,25 +119,7 @@ router.put('/:key', (req, res) => {
     }
 });
 
-// Get customer field configuration
-router.get('/customer-fields/config', (req, res) => {
-    try {
-        const setting = db.prepare('SELECT value FROM settings WHERE key = ?').get('customer_fields');
 
-        if (!setting) {
-            return res.json({
-                required: ['name'],
-                optional: ['phone', 'email', 'address', 'policy_number'],
-                custom: []
-            });
-        }
-
-        res.json(JSON.parse(setting.value));
-    } catch (error) {
-        console.error('Get customer fields error:', error);
-        res.status(500).json({ error: 'Failed to get customer fields configuration' });
-    }
-});
 
 // ============ BACKUP SETTINGS ============
 const backupService = require('../services/backupService');
