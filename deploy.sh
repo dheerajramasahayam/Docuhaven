@@ -79,6 +79,42 @@ echo "🚀 Deployment Prerequisites OK. Proceeding..."
 echo "📥 Pulling latest code..."
 git pull origin main
 
+# --- 3.5 Ensure .env Configuration ---
+if [ ! -f .env ]; then
+    echo "⚠️  .env file missing. Setting up configuration..."
+    
+    # Generate random secret
+    GEN_SECRET="secret_$(date +%s)_$RANDOM"
+    if command -v openssl &> /dev/null; then
+        GEN_SECRET=$(openssl rand -hex 32)
+    fi
+
+    echo "-------------------------------------------------------"
+    echo "Configuring JWT_SECRET for secure sessions."
+    echo "Press ENTER to use the auto-generated secret (Recommended)."
+    echo "Or type your own secret and press ENTER."
+    echo "-------------------------------------------------------"
+    
+    # Interactive input with timeout (default to generated if no input after 10s or non-interactive)
+    if [ -t 0 ]; then
+        read -t 10 -p "JWT_SECRET [${GEN_SECRET:0:10}...]: " USER_SECRET
+        echo ""
+    fi
+
+    FINAL_SECRET="${USER_SECRET:-$GEN_SECRET}"
+
+    # Write .env file
+    cat <<EOT > .env
+# Server Configuration
+PORT=80
+NODE_ENV=production
+
+# Security Keys
+JWT_SECRET=${FINAL_SECRET}
+EOT
+    echo "✅ .env file created successfully."
+fi
+
 # --- 4. Install Project Dependencies ---
 echo "📦 Installing project dependencies..."
 npm install || { echo "❌ npm install failed"; exit 1; }
