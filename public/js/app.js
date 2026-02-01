@@ -44,7 +44,9 @@ class App {
       // Direct clients to their profile immediately
       this.currentPage = 'profile';
       this.navigate('profile');
-    } else if (this.user.role === 'viewer' && this.currentPage === 'dashboard') {
+      this.currentPage = 'profile';
+      this.navigate('profile');
+    } else if ((this.user.role === 'viewer' || this.user.role === 'employee') && this.currentPage === 'dashboard') {
       this.currentPage = 'customers';
       this.navigate(this.currentPage);
     } else {
@@ -444,6 +446,7 @@ class App {
     const isAdmin = this.user.role === 'admin';
     const isClient = this.user.role === 'client';
     const isViewer = this.user.role === 'viewer';
+    const isEmployee = this.user.role === 'employee';
 
     return `
       <div class="app-container">
@@ -454,7 +457,7 @@ class App {
           <nav class="sidebar-nav">
             <div class="nav-section">
               <div class="nav-section-title">Main</div>
-              ${!isClient && !isViewer ? `<div class="nav-item" data-page="dashboard"><span class="nav-item-icon">📊</span>Dashboard</div>` : ''}
+              ${!isClient && !isViewer && !isEmployee ? `<div class="nav-item" data-page="dashboard"><span class="nav-item-icon">📊</span>Dashboard</div>` : ''}
               ${isClient
         ? `<div class="nav-item" data-page="profile"><span class="nav-item-icon">👤</span>My Profile</div>`
         : `<div class="nav-item" data-page="customers"><span class="nav-item-icon">👥</span>Customers</div>

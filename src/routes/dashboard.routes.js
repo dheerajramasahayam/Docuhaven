@@ -61,20 +61,8 @@ router.get('/stats', authenticateToken, (req, res) => {
             return res.json({ role: 'admin', stats });
         }
 
-        // Employee gets their recent customers
-        if (req.user.role === 'employee') {
-            const recentCustomers = db.prepare(`
-                SELECT * FROM customers 
-                WHERE created_by = ? 
-                ORDER BY created_at DESC 
-                LIMIT 10
-            `).all(req.user.id);
-            
-            return res.json({ role: 'employee', recentCustomers });
-        }
-
-        // Viewers get no dashboard data
-        return res.json({ role: 'viewer' });
+        // Access denied for non-admins
+        return res.status(403).json({ error: 'Access denied' });
 
     } catch (error) {
         console.error('Get stats error:', error);
