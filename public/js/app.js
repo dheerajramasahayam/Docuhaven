@@ -172,7 +172,7 @@ class App {
                 <button class="btn btn-secondary" id="add-field-btn">Add</button>
             </div>
             <div id="custom-fields-list" style="display:flex;flex-wrap:wrap;gap:var(--space-2)">
-                ${(this.setupData.customerFields?.custom || []).map(f => `<span class="badge badge-primary" style="background:var(--primary);color:white;padding:2px 8px;border-radius:12px;font-size:12px">${f}</span>`).join('')}
+                ${(this.setupData.customerFields?.custom || []).map(f => `<span class="badge badge-primary" style="background:var(--primary-600);color:white;padding:2px 8px;border-radius:12px;font-size:12px">${f}</span>`).join('')}
             </div>
         </div>
 
@@ -204,7 +204,7 @@ class App {
           const list = document.getElementById('custom-fields-list');
           const badge = document.createElement('span');
           badge.className = 'badge badge-primary';
-          badge.style.cssText = 'background:var(--primary);color:white;padding:2px 8px;border-radius:12px;font-size:12px';
+          badge.style.cssText = 'background:var(--primary-600);color:white;padding:2px 8px;border-radius:12px;font-size:12px';
           badge.textContent = val;
           list.appendChild(badge);
 
